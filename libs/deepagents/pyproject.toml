@@ -119,9 +119,14 @@ ignore-var-parameters = true
     "ANN001",  # Missing type annotation for function argument
     "ANN201",  # Missing return type annotation for public function
     "ANN202",  # Missing return type annotation for private function
+    "ARG001",  # Unused function argument — common for test stub handlers
     "ARG002",  # Unused method argument — common for pytest fixtures
+    "ARG005",  # Unused lambda argument — common for test stub handlers
     "D1",      # Missing docstrings
+    "PERF401", # List comprehension suggestion in test helpers
+    "PLC0415", # Import not at top of file — fine for lazy fixture imports
     "PLR2004", # Magic value used in comparison — fine in test assertions
+    "PT012",   # pytest.raises wrapping multiple statements — fine in tests
     "PT018",   # Assertion should be broken down into multiple parts
     "S101",    # Use of `assert` detected
     "S311",    # Pseudo-random generator not suitable for security — fine in tests

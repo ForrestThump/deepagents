@@ -63,6 +63,7 @@ from deepagents.profiles.harness.harness_profiles import (
     _apply_profile_prompt,
     _harness_profile_for_model,
 )
+from deepagents.tracing.middleware import ModelViewLogMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,25 @@ def _apply_custom_middleware(
     else:
         result.extend(to_append)
     return result
+
+
+def _relocate_tracing_middleware_to_end(
+    middleware: list[AgentMiddleware[Any, Any, Any]],
+) -> list[AgentMiddleware[Any, Any, Any]]:
+    """Move `ModelViewLogMiddleware` instances to the innermost slot.
+
+    langchain composes `wrap_model_call` with the first middleware as the
+    outermost layer, so the innermost slot is the end of the list. The MVL
+    tracer must sit there to observe the final request after every other
+    middleware (filesystem filtering, memory injection, prompt caching,
+    summarization) has transformed it, and the raw completion the provider
+    returned.
+    """
+    tracing = [m for m in middleware if isinstance(m, ModelViewLogMiddleware)]
+    if not tracing:
+        return middleware
+    rest = [m for m in middleware if not isinstance(m, ModelViewLogMiddleware)]
+    return [*rest, *tracing]
 
 
 _REQUIRED_MIDDLEWARE: tuple[tuple[type[AgentMiddleware[Any, Any, Any]], tuple[str, ...]], ...] = (
@@ -891,6 +911,9 @@ def create_deep_agent(  # noqa: C901, PLR0912, PLR0915  # Complex graph assembly
     # stripped last and cannot be restored by a custom wrap_model_call.
     if _profile.excluded_tools:
         deepagent_middleware.append(_ToolExclusionMiddleware(excluded=_profile.excluded_tools))
+    # The MVL tracer must be innermost so it observes the final request. Relocate
+    # it to the end of the stack regardless of where the caller listed it.
+    deepagent_middleware = _relocate_tracing_middleware_to_end(deepagent_middleware)
     state_schemas = [state_schema] if state_schema is not None else []
     state_schemas.extend(mw.state_schema for mw in deepagent_middleware if getattr(mw, "state_schema", None) is not None)
     private_state_keys = private_state_field_names(*state_schemas)

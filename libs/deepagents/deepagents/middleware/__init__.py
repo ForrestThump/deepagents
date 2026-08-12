@@ -75,6 +75,7 @@ from deepagents.middleware.summarization import (
     SummarizationToolMiddleware,
     create_summarization_tool_middleware,
 )
+from deepagents.tracing.middleware import ModelViewLogMiddleware
 
 __all__ = [
     "DEEPAGENTS_DEFAULT_SUMMARY_PROMPT",
@@ -91,6 +92,7 @@ __all__ = [
     "GraderResponse",
     "GraderVerdict",
     "MemoryMiddleware",
+    "ModelViewLogMiddleware",
     "RubricEvaluation",
     "RubricMiddleware",
     "RubricResult",

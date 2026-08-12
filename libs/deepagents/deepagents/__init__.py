@@ -24,6 +24,19 @@ from deepagents.profiles.provider.provider_profiles import (
     ProviderProfile,
     register_provider_profile,
 )
+from deepagents.tracing import (
+    ModelViewLogConfig,
+    ModelViewLogger,
+    ModelViewLogMiddleware,
+    ReconstructionError,
+    assert_log_reconstructs,
+    canonical_json,
+    now_rfc3339,
+    read_events,
+    reconstruct_turn,
+    sha256_bytes,
+    sha256_json,
+)
 
 __all__ = [
     "AsyncSubAgent",
@@ -37,12 +50,23 @@ __all__ = [
     "HarnessProfile",
     "HarnessProfileConfig",
     "MemoryMiddleware",
+    "ModelViewLogConfig",
+    "ModelViewLogMiddleware",
+    "ModelViewLogger",
     "ProviderProfile",
+    "ReconstructionError",
     "RubricMiddleware",
     "SubAgent",
     "SubAgentMiddleware",
     "__version__",
+    "assert_log_reconstructs",
+    "canonical_json",
     "create_deep_agent",
+    "now_rfc3339",
+    "read_events",
+    "reconstruct_turn",
     "register_harness_profile",
     "register_provider_profile",
+    "sha256_bytes",
+    "sha256_json",
 ]
