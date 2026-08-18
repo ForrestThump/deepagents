@@ -6,7 +6,10 @@ subagent, and summarization middleware.
 """
 
 import logging
+import os
+import uuid
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Annotated, Any, Required, cast
 
 from langchain.agents import AgentState, create_agent
@@ -236,6 +239,35 @@ def _apply_custom_middleware(
     return result
 
 
+def _default_mvl_path() -> str:
+    """Return the MVL JSONL path for a production `create_deep_agent` session.
+
+    `DEEPAGENTS_MVL_PATH` wins. Otherwise `DEEPAGENTS_MVL_DIR` (or
+    ``~/.deepagents/mvl``) gets a unique file. A real session writes JSONL
+    without the caller constructing a tracer.
+    """
+    explicit = os.environ.get("DEEPAGENTS_MVL_PATH")
+    if explicit:
+        return explicit
+    directory = Path(os.environ.get("DEEPAGENTS_MVL_DIR", Path.home() / ".deepagents" / "mvl"))
+    directory.mkdir(parents=True, exist_ok=True)
+    return str(directory / f"{uuid.uuid4().hex}.mvl.jsonl")
+
+
+def _ensure_production_mvl(
+    middleware: list[AgentMiddleware[Any, Any, Any]],
+    mvl_path: str | Path | None,
+) -> list[AgentMiddleware[Any, Any, Any]]:
+    """Install `ModelViewLogMiddleware` unless the caller already provided one."""
+    if any(isinstance(item, ModelViewLogMiddleware) for item in middleware):
+        return middleware
+    path = mvl_path if mvl_path is not None else _default_mvl_path()
+    middleware.append(
+        ModelViewLogMiddleware(path=path, harness_name="deepagents", harness_version="0.1.0")
+    )
+    return middleware
+
+
 def _relocate_tracing_middleware_to_end(
     middleware: list[AgentMiddleware[Any, Any, Any]],
 ) -> list[AgentMiddleware[Any, Any, Any]]:
@@ -305,6 +337,7 @@ def create_deep_agent(  # noqa: C901, PLR0912, PLR0915  # Complex graph assembly
     debug: bool = False,
     name: str | None = None,
     cache: BaseCache | None = None,
+    mvl_path: str | Path | None = None,
 ) -> CompiledStateGraph[AgentState[ResponseT], ContextT, InputAgentState, OutputAgentState[ResponseT]]:  # ty: ignore[invalid-type-arguments]  # ty can't verify generic TypedDicts satisfy StateLike bound
     r"""Create a deep agent.
 
@@ -575,6 +608,11 @@ def create_deep_agent(  # noqa: C901, PLR0912, PLR0915  # Complex graph assembly
 
             Passed through to [`create_agent`][langchain.agents.create_agent].
         name: The name of the agent.
+        mvl_path: Optional Model View Log JSONL path. When omitted, a production
+            tracer is still installed (see `DEEPAGENTS_MVL_PATH` /
+            `DEEPAGENTS_MVL_DIR`). Pass an existing
+            [`ModelViewLogMiddleware`][deepagents.tracing.middleware.ModelViewLogMiddleware]
+            in `middleware` to keep that instance.
 
             Passed through to [`create_agent`][langchain.agents.create_agent].
         cache: The cache to use for the agent.
@@ -911,6 +949,9 @@ def create_deep_agent(  # noqa: C901, PLR0912, PLR0915  # Complex graph assembly
     # stripped last and cannot be restored by a custom wrap_model_call.
     if _profile.excluded_tools:
         deepagent_middleware.append(_ToolExclusionMiddleware(excluded=_profile.excluded_tools))
+    # Production sessions emit MVL without the caller constructing a tracer.
+    # A caller-supplied ModelViewLogMiddleware still wins.
+    deepagent_middleware = _ensure_production_mvl(deepagent_middleware, mvl_path)
     # The MVL tracer must be innermost so it observes the final request. Relocate
     # it to the end of the stack regardless of where the caller listed it.
     deepagent_middleware = _relocate_tracing_middleware_to_end(deepagent_middleware)

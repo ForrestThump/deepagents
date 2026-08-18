@@ -3062,6 +3062,9 @@ def create_cli_agent(
     effective_recursion_limit = (
         recursion_limit if recursion_limit is not None else resolve_recursion_limit()
     )
+    mvl_path = os.environ.get("DEEPAGENTS_MVL_PATH")
+    if not mvl_path:
+        mvl_path = str(settings.ensure_agent_dir(assistant_id) / "run.mvl.jsonl")
     agent = create_deep_agent(
         model=model,
         system_prompt=system_prompt,
@@ -3073,5 +3076,6 @@ def create_cli_agent(
         checkpointer=checkpointer,
         subagents=all_subagents or None,
         name=_sanitize_agent_message_name(assistant_id),
+        mvl_path=mvl_path,
     ).with_config({**config, "recursion_limit": effective_recursion_limit})
     return agent, composite_backend

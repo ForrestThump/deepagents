@@ -568,3 +568,48 @@ class TestCreateDeepAgentIntegration:
             ]
             assert len(issuers) == 1, f"call_id {call_id} must join to one completion"
             assert result["turn"] == issuers[0]["turn"]
+
+
+class TestProductionCreateDeepAgentEmitsMvl:
+    """The shipped factory writes MVL without the test constructing a tracer."""
+
+    def test_create_deep_agent_writes_mvl_without_hand_built_tracer(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "production.mvl.jsonl"
+        monkeypatch.setenv("DEEPAGENTS_MVL_PATH", str(path))
+        model = GenericFakeChatModel(
+            messages=iter(
+                [
+                    AIMessage(
+                        content="calling echo",
+                        tool_calls=[
+                            {
+                                "name": "_echo",
+                                "args": {"text": "hi"},
+                                "id": "call_prod_1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    ),
+                    AIMessage(content="echo returned hi"),
+                ]
+            )
+        )
+        agent = create_deep_agent(
+            model=model,
+            tools=[_echo],
+            system_prompt="You are a concise assistant.",
+        )
+        agent.invoke({"messages": [HumanMessage(content="hi")]})
+        assert path.is_file(), "production create_deep_agent must write MVL"
+        assert path.stat().st_size > 0, "MVL must be non-empty before reconstruct"
+        events = read_events(path)
+        assert any(e["type"] == "prompt" for e in events)
+        assert_log_reconstructs(events)
+        turn = reconstruct_turn(events, min(turns_present(events)))
+        assert turn["system_text"]
+        assert turn["tool_catalog"]
+        assert turn["messages"]
+        assert "tools_offered" in turn
+        assert "params" in turn
